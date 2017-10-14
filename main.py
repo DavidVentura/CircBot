@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import sys
 import os.path
 import json
@@ -5,13 +6,12 @@ import time
 import configparser
 import requests
 import getLiveChatID
-
-#OAuth2 libs
-import httplib2
-from oauth2client import client
+import credentials
+from pprint import pprint
+from datetime import datetime
 
 VERSION = "0.3.2"
-PYTHONIOENCODING="UTF-8"
+PYTHONIOENCODING = "UTF-8"
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -19,105 +19,95 @@ config.read('config.ini')
 debug = int(config["Settings"]["debug"])
 
 with open("config.json") as jsonFile:
-	configJSON = json.load(jsonFile)
+    configJSON = json.load(jsonFile)
+
 
 # Message handler
 def handle_msg(msg):
-	if (configJSON["echoMode"] == "whitelist"):
-		wlWords = configJSON["whitelistFilter"]
-		for word in wlWords:
-			if word in msg["snippet"]["displayMessage"]:
-				try:
-					print(('<'+msg["authorDetails"]["displayName"]+'> '+msg["snippet"]["displayMessage"]).encode('utf-8',"ignore"))
-				except UnicodeEncodeError:
-					print('Couldn\'t display a message, skipped.')
-				return
-	elif (configJSON["echoMode"] == "all"):
-		try:
-			print(('<'+msg["authorDetails"]["displayName"]+'> '+msg["snippet"]["displayMessage"]).encode('utf-8', "ignore"))
-		except UnicodeEncodeError:
-			print('Couldn\'t display a message, skipped.')
-		return
+    # pprint(msg)
+    pAt = msg["snippet"]["publishedAt"]
+    obj = {'id': msg["id"],
+           'msg': msg["snippet"]["displayMessage"],
+           'date': datetime.strptime(pAt, "%Y-%m-%dT%H:%M:%S.%fZ")
+           }
+    pprint(obj)
+    print("#" * 50)
+    return
 
-# Authenticate
 
-if (not os.path.isfile("OAuthCredentials.json")):
-	import auth
-	os.system('cls')
+if not os.path.isfile("OAuthCredentials.json"):
+    print("Run auth first! (OAuthCredentials.json missing)")
+    sys.exit(1)
 
-os.system('cls')
-print("Welcome to Circbot v"+VERSION+"!")
-
-credentialsFile = open("OAuthCredentials.json","r")
-credentialsJSON = credentialsFile.read()
-
-credentials = client.OAuth2Credentials.from_json(credentialsJSON)
-
-token_obj = credentials.get_access_token()
-token_str = str(token_obj.access_token)
+token_str = credentials.read()
 
 # End of authentication
 
 liveChatID = getLiveChatID.get_livechat_id()
-if (liveChatID == False):
-	print("No livestream found :(")
-	sys.exit(1)
+print("Live Chat ID", liveChatID)
+if not liveChatID:
+    print("No livestream found :(")
+    sys.exit(1)
 
 nextPageToken = ''
 
-while (True):
 
-	# Make sure access token is valid before request
-	if (credentials.access_token_expired):
-		# Access token expired, get a new one
-		token_obj = credentials.get_access_token() #get_access_token() should refresh the token automatically
-		token_str = str(token_obj.access_token)
+def main():
+    while (True):
 
-	url = 'https://content.googleapis.com/youtube/v3/liveChat/messages?liveChatId='+liveChatID+'&part=snippet,authorDetails&pageToken='+nextPageToken
+        # Make sure access token is valid before request
+        if (credentials.access_token_expired):
+            # Access token expired, get a new one
+            # get_access_token() should refresh the token automatically
+            token_obj = credentials.get_access_token()
+            token_str = str(token_obj.access_token)
 
-	headers = { "Authorization": "Bearer "+token_str }
+        url = 'https://content.googleapis.com/youtube/v3/liveChat/messages?liveChatId='+liveChatID+'&part=snippet,authorDetails&pageToken='+nextPageToken
 
-	r = requests.get(url, headers=headers)
+        headers = {"Authorization": "Bearer " + token_str}
 
-	if (r.status_code == 200):
-		resp = r.json()
-		if (debug >= 2):
-			print json.dumps(resp, indent=4, sort_keys=True)
+        r = requests.get(url, headers=headers)
 
-		nextPageToken = resp["nextPageToken"]
+        if (r.status_code == 200):
+            resp = r.json()
+            if (debug >= 2):
+                print(json.dumps(resp, indent=4, sort_keys=True))
 
-		msgs = resp["items"]
+            nextPageToken = resp["nextPageToken"]
 
-		for msg in msgs:
-			#Message handling
-			handle_msg(msg)
+            msgs = resp["items"]
 
-		delay_ms = resp['pollingIntervalMillis']
-		delay = float(float(delay_ms)/1000)
+            for msg in msgs:
+                handle_msg(msg)
 
-	elif (r.status_code == 401):
-		#Unauthorized
-		delay = 10
+            delay_ms = resp['pollingIntervalMillis']
+            delay = float(float(delay_ms)/1000)
 
-		if (credentials.access_token_expired):
-			# Access token expired, get a new one
-			if (debug >= 1):
-				print "Access token expired, obtaining a new one"
+        elif (r.status_code == 401):
+            # Unauthorized
+            delay = 10
 
-			token_obj = credentials.get_access_token() #get_access_token() should refresh the token automatically
-			token_str = str(token_obj.access_token)
-		else:
-			print "Error: Unauthorized. Trying again in 30 seconds... (ctrl+c to force quit)"
-			resp = r.json()
-			if (debug >= 1):
-				print json.dumps(resp, indent=4, sort_keys=True)
+            if (credentials.access_token_expired):
+                # Access token expired, get a new one
+                if (debug >= 1):
+                    print("Access token expired, obtaining a new one")
 
-			delay = 30
+                token_obj = credentials.get_access_token()
+                # get_access_token() should refresh the token automatically
+                token_str = str(token_obj.access_token)
+            else:
+                print("Error: Unauthorized. Trying again in 30 seconds...", end="")
+                print("(ctrl+c to force quit)")
+                resp = r.json()
+                if (debug >= 1):
+                    print(json.dumps(resp, indent=4, sort_keys=True))
 
-	else:
-		print("Unrecognized error:\n")
-		resp = r.json()
-		print(json.dumps(resp, indent=4, sort_keys=True))
-		delay = 30
+                delay = 30
 
-	time.sleep(delay)
+        else:
+            print("Unrecognized error:\n")
+            resp = r.json()
+            print(json.dumps(resp, indent=4, sort_keys=True))
+            delay = 30
+
+        time.sleep(delay)

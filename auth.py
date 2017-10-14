@@ -13,10 +13,11 @@ flow = client.flow_from_clientsecrets(
 	redirect_uri='urn:ietf:wg:oauth:2.0:oob')
 
 auth_uri = flow.step1_get_authorize_url()
+print(auth_uri)
 webbrowser.open(auth_uri)
 
-print "Opening web browser to request auth code"
-auth_code = raw_input('Enter the auth code: ')
+print("Opening web browser to request auth code")
+auth_code = input('Enter the auth code: ')
 
 credentials = flow.step2_exchange(auth_code)
 http_auth = credentials.authorize(httplib2.Http())

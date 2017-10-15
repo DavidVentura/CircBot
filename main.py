@@ -2,7 +2,6 @@
 import sys
 import json
 import time
-import configparser
 import requests
 import getLiveChatID
 import credentials
@@ -11,11 +10,7 @@ from datetime import datetime
 
 VERSION = "0.3.2"
 PYTHONIOENCODING = "UTF-8"
-
-config = configparser.ConfigParser()
-config.read('config.ini')
-
-debug = int(config["Settings"]["debug"])
+debug = 0
 
 
 # Message handler

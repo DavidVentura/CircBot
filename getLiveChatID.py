@@ -1,5 +1,4 @@
 import sys
-import os.path
 import json
 import requests
 import credentials
@@ -7,22 +6,19 @@ import credentials
 
 def get_livechat_id():
 
-    if not os.path.isfile("OAuthCredentials.json"):
-        print("Auth first")
-        sys.exit(1)
-
     token_str = credentials.read()
     url = 'https://content.googleapis.com/youtube/v3/liveBroadcasts?broadcastStatus=active&broadcastType=all&part=id%2Csnippet%2CcontentDetails'
-    headers = {"Authorization": "Bearer " + token_str}
+    headers = {"Authorization": "Bearer %s" % token_str}
 
     r = requests.get(url, headers=headers)
 
-    if (r.status_code == 200):
+    if r.status_code == 200:
         resp = r.json()
-        if (len(resp["items"]) <= 0):
+        if len(resp["items"]) == 0:
             return False
         else:
-            # Should only be 1 item unless YT adds multiple livestreams, then we'll assume it's the first for now
+            # Should only be 1 item unless YT adds multiple livestreams
+            # then we'll assume it's the first for now
             streamMeta = resp["items"][0]["snippet"]
             liveChatID = streamMeta["liveChatId"]
             return liveChatID

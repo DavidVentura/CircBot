@@ -1,6 +1,13 @@
+import sys
+import os.path
 from oauth2client import client
 
+
 def read():
+    if not os.path.isfile("OAuthCredentials.json"):
+        print("Auth first")
+        sys.exit(1)
+
     credentialsFile = open("OAuthCredentials.json", "r")
     credentialsJSON = credentialsFile.read()
 

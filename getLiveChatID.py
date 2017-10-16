@@ -19,6 +19,10 @@ def get_livechat_id():
         else:
             # Should only be 1 item unless YT adds multiple livestreams
             # then we'll assume it's the first for now
+            print("Live events:", len(resp["items"]))
+            from pprint import pprint
+            pprint(resp)
+            print("*" * 50)
             streamMeta = resp["items"][0]["snippet"]
             liveChatID = streamMeta["liveChatId"]
             return liveChatID

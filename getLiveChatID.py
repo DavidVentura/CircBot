@@ -7,10 +7,14 @@ import credentials
 def get_livechat_id():
 
     token_str = credentials.read()
-    url = 'https://content.googleapis.com/youtube/v3/liveBroadcasts?broadcastStatus=active&broadcastType=all&part=id%2Csnippet%2CcontentDetails'
+    payload = {'broadcastStatus': 'active',
+               'broadcastType': 'all',
+               'part': 'id+snippet+contentDetails'
+               }
+    url = 'https://content.googleapis.com/youtube/v3/liveBroadcasts'
     headers = {"Authorization": "Bearer %s" % token_str}
 
-    r = requests.get(url, headers=headers)
+    r = requests.get(url, headers=headers, params=payload)
 
     if r.status_code == 200:
         resp = r.json()

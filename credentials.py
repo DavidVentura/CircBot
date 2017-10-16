@@ -4,43 +4,49 @@ import httplib2
 from oauth2client import client
 
 
-def read():
-    if not os.path.isfile("OAuthCredentials.json"):
-        print("Auth first")
-        sys.exit(1)
+class Credentials:
+    credentials = {}
 
-    credentialsFile = open("OAuthCredentials.json", "r")
-    credentialsJSON = credentialsFile.read()
+    def expired(self):
+        return self.credentials.access_token_expired
 
-    credentials = client.OAuth2Credentials.from_json(credentialsJSON)
+    def read(self):
+        if not os.path.isfile("OAuthCredentials.json"):
+            print("Auth first")
+            sys.exit(1)
 
-    token_obj = credentials.get_access_token()
-    token_str = str(token_obj.access_token)
-    return token_str
+        credentialsFile = open("OAuthCredentials.json", "r")
+        credentialsJSON = credentialsFile.read()
 
+        self.credentials = client.OAuth2Credentials.from_json(credentialsJSON)
 
-def auth():
-    if os.path.isfile("OAuthCredentials.json"):
-        print("Trying to auth but OAuthCredentials.json exists")
-        return
-    flow = client.flow_from_clientsecrets(
-        'client_secrets.json',
-        scope='https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl',
-        redirect_uri='urn:ietf:wg:oauth:2.0:oob')
+        token_obj = self.credentials.get_access_token()
+        token_str = str(token_obj.access_token)
+        return token_str
 
-    auth_uri = flow.step1_get_authorize_url()
-    print(auth_uri)
+    def auth(self):
+        if os.path.isfile("OAuthCredentials.json"):
+            print("Trying to auth but OAuthCredentials.json exists")
+            return
+        flow = client.flow_from_clientsecrets(
+            'client_secrets.json',
+            scope='https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl',
+            redirect_uri='urn:ietf:wg:oauth:2.0:oob')
 
-    print("Open the shown link")
-    auth_code = input('Enter the auth code: ')
+        auth_uri = flow.step1_get_authorize_url()
+        print(auth_uri)
 
-    credentials = flow.step2_exchange(auth_code)
-    credentials.authorize(httplib2.Http())
+        print("Open the shown link")
+        auth_code = input('Enter the auth code: ')
 
-    outFile = open("OAuthCredentials.json", "w")
-    outFile.write(str(credentials.to_json()))
-    outFile.close()
+        self.credentials = flow.step2_exchange(auth_code)
+        self.credentials.authorize(httplib2.Http())
+
+        outFile = open("OAuthCredentials.json", "w")
+        outFile.write(str(self.credentials.to_json()))
+        outFile.close()
 
 
 if __name__ == '__main__':
-    auth()
+    c = Credentials()
+    c.auth()

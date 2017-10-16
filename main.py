@@ -3,10 +3,9 @@ import sys
 import json
 import time
 import requests
-import getLiveChatID
-import credentials
-from pprint import pprint
+from credentials import Credentials
 from datetime import datetime
+from pprint import pprint
 
 VERSION = "0.3.2"
 PYTHONIOENCODING = "UTF-8"
@@ -18,76 +17,103 @@ data = {}
 # }
 
 
-# Message handler
-def handle_msg(msg):
-    # pprint(msg)
-    if msg["snippet"]["type"] != "textMessageEvent":
-        print("non text message event")
-        return
-    pAt = msg["snippet"]["publishedAt"]
-    cID = msg["snippet"]["liveChatId"]
-    uID = msg["id"]
-    obj = {
-           'msg': msg["snippet"]["displayMessage"],
-           'date': datetime.strptime(pAt, "%Y-%m-%dT%H:%M:%S.%fZ")
-           }
-    if cID not in data:
-        data[cID] = {}
-    data[cID][uID] = obj
+class YTChat:
 
-    pprint(obj)
-    print("#" * 50)
+    def __init__(self, cb):
+        self.cb = cb
+        self.credentials = Credentials()
+        self.token_str = self.credentials.read()
+        self.liveChatID = self.get_livechat_id()
+        print("Live Chat ID", self.liveChatID)
+        if not self.liveChatID:
+            print("[] No livestream found :(")
+            sys.exit(1)
 
+    def handle_msg(self, msg):
+        # pprint(msg)
+        if msg["snippet"]["type"] != "textMessageEvent":
+            print("non text message event")
+            return
+        pAt = msg["snippet"]["publishedAt"]
+        cID = msg["snippet"]["liveChatId"]
+        uID = msg["id"]
+        obj = {
+               'msg': msg["snippet"]["displayMessage"],
+               'date': datetime.strptime(pAt, "%Y-%m-%dT%H:%M:%S.%fZ")
+               }
+        if cID not in data:
+            data[cID] = {}
+        data[cID][uID] = obj
+        self.cb(msg)
 
-def main():
-    token_str = credentials.read()
-    liveChatID = getLiveChatID.get_livechat_id()
-    print("Live Chat ID", liveChatID)
-    if not liveChatID:
-        print("[] No livestream found :(")
-        sys.exit(1)
-
-    nextPageToken = ''
-    while (True):
-
-        # Make sure access token is valid before request
-        if (credentials.access_token_expired):
-            # Access token expired, get a new one
+    def main(self):
+        nextPageToken = ''
+        while (True):
+            # Make sure access token is valid before request
             # credentials.read() should refresh the token automatically
-            token_str = credentials.read()
-        payload = {'liveChatId': liveChatID,
-                   'part': 'snippet,authorDetails',
-                   'pageToken': nextPageToken}
-        url = 'https://content.googleapis.com/youtube/v3/liveChat/messages'
+            if (self.credentials.expired()):
+                token_str = self.credentials.read()
 
-        headers = {"Authorization": "Bearer " + token_str}
+            payload = {'liveChatId': self.liveChatID,
+                       'part': 'snippet,authorDetails',
+                       'pageToken': nextPageToken}
+            url = 'https://content.googleapis.com/youtube/v3/liveChat/messages'
+            headers = {"Authorization": "Bearer " + token_str}
+            r = requests.get(url, headers=headers, params=payload)
 
+            if (r.status_code == 200):
+                resp = r.json()
+                nextPageToken = resp["nextPageToken"]
+                msgs = resp["items"]
+                for msg in msgs:
+                    self.handle_msg(msg)
+
+                delay = resp['pollingIntervalMillis']/1000
+            elif (r.status_code == 401):  # Unauthorized
+                delay = 10
+                if not self.credentials.expired:
+                    print("Error: Unauthorized. waiting 30 seconds...")
+                    if (debug >= 1):
+                        resp = r.json()
+                        print(json.dumps(resp, indent=4, sort_keys=True))
+                    delay = 30
+            else:
+                print("Unrecognized error:\n")
+                resp = r.json()
+                print(json.dumps(resp, indent=4, sort_keys=True))
+                delay = 30
+
+            time.sleep(delay)
+
+    def get_livechat_id(self):
+        token_str = self.credentials.read()
+        payload = {'broadcastStatus': 'active',
+                   'broadcastType': 'all',
+                   'part': 'id+snippet+contentDetails'
+                   }
+        url = 'https://content.googleapis.com/youtube/v3/liveBroadcasts'
+        headers = {"Authorization": "Bearer %s" % token_str}
         r = requests.get(url, headers=headers, params=payload)
 
-        if (r.status_code == 200):
+        if r.status_code == 200:
             resp = r.json()
-            nextPageToken = resp["nextPageToken"]
-            msgs = resp["items"]
-            for msg in msgs:
-                handle_msg(msg)
-
-            delay = resp['pollingIntervalMillis']/1000
-        elif (r.status_code == 401):  # Unauthorized
-            delay = 10
-            if not credentials.access_token_expired:
-                print("Error: Unauthorized. waiting 30 seconds...")
-                if (debug >= 1):
-                    resp = r.json()
-                    print(json.dumps(resp, indent=4, sort_keys=True))
-                delay = 30
+            if len(resp["items"]) == 0:
+                return False
+            else:
+                # Should only be 1 item unless YT adds multiple livestreams
+                # then we'll assume it's the first for now
+                print("Live events:", len(resp["items"]))
+                pprint(resp)
+                print("*" * 50)
+                streamMeta = resp["items"][0]["snippet"]
+                liveChatID = streamMeta["liveChatId"]
+                return liveChatID
         else:
             print("Unrecognized error:\n")
             resp = r.json()
             print(json.dumps(resp, indent=4, sort_keys=True))
-            delay = 30
-
-        time.sleep(delay)
 
 
 if __name__ == '__main__':
-    main()
+    yt = YTChat(pprint)
+    yt.main()

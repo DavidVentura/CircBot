@@ -55,12 +55,14 @@ def main():
             # Access token expired, get a new one
             # credentials.read() should refresh the token automatically
             token_str = credentials.read()
-
-        url = 'https://content.googleapis.com/youtube/v3/liveChat/messages?liveChatId='+liveChatID+'&part=snippet,authorDetails&pageToken='+nextPageToken
+        payload = {'liveChatId': liveChatID,
+                   'part': 'snippet,authorDetails',
+                   'pageToken': nextPageToken}
+        url = 'https://content.googleapis.com/youtube/v3/liveChat/messages'
 
         headers = {"Authorization": "Bearer " + token_str}
 
-        r = requests.get(url, headers=headers)
+        r = requests.get(url, headers=headers, params=payload)
 
         if (r.status_code == 200):
             resp = r.json()

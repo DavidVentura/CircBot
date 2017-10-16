@@ -11,19 +11,32 @@ from datetime import datetime
 VERSION = "0.3.2"
 PYTHONIOENCODING = "UTF-8"
 debug = 0
+data = {}
+# store data[chat id][user id] = {
+# 'msg': 'asd',
+# 'date': datetime
+# }
 
 
 # Message handler
 def handle_msg(msg):
     # pprint(msg)
+    if msg["snippet"]["type"] != "textMessageEvent":
+        print("non text message event")
+        return
     pAt = msg["snippet"]["publishedAt"]
-    obj = {'id': msg["id"],
+    cID = msg["snippet"]["liveChatId"]
+    uID = msg["id"]
+    obj = {
            'msg': msg["snippet"]["displayMessage"],
            'date': datetime.strptime(pAt, "%Y-%m-%dT%H:%M:%S.%fZ")
            }
+    if cID not in data:
+        data[cID] = {}
+    data[cID][uID] = obj
+
     pprint(obj)
     print("#" * 50)
-    return
 
 
 def main():

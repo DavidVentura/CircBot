@@ -3,8 +3,11 @@ import sys
 import json
 import time
 import requests
-from credentials import Credentials
-from datetime import datetime
+try:
+    from .credentials import Credentials
+except:
+    from credentials import Credentials
+
 from pprint import pprint
 
 VERSION = "0.3.2"
@@ -24,34 +27,26 @@ class YTChat:
         self.credentials = Credentials()
         self.token_str = self.credentials.read()
         self.liveChatID = self.get_livechat_id()
-        print("Live Chat ID", self.liveChatID)
+        self.stopped = False
         if not self.liveChatID:
             print("[] No livestream found :(")
-            sys.exit(1)
+        else:
+            print("Live Chat ID", self.liveChatID)
 
     def handle_msg(self, msg):
         # pprint(msg)
         if msg["snippet"]["type"] != "textMessageEvent":
             print("non text message event")
             return
-        pAt = msg["snippet"]["publishedAt"]
-        cID = msg["snippet"]["liveChatId"]
-        uID = msg["id"]
-        obj = {
-               'msg': msg["snippet"]["displayMessage"],
-               'date': datetime.strptime(pAt, "%Y-%m-%dT%H:%M:%S.%fZ")
-               }
-        if cID not in data:
-            data[cID] = {}
-        data[cID][uID] = obj
         self.cb(msg)
 
     def main(self):
         nextPageToken = ''
-        while (True):
+        token_str = ''
+        while not self.stopped:
             # Make sure access token is valid before request
             # credentials.read() should refresh the token automatically
-            if (self.credentials.expired()):
+            if self.credentials.expired() or token_str == '':
                 token_str = self.credentials.read()
 
             payload = {'liveChatId': self.liveChatID,
@@ -82,6 +77,7 @@ class YTChat:
                 resp = r.json()
                 print(json.dumps(resp, indent=4, sort_keys=True))
                 delay = 30
+                delay = 3  #FIXME testing
 
             time.sleep(delay)
 
@@ -89,12 +85,11 @@ class YTChat:
         token_str = self.credentials.read()
         payload = {'broadcastStatus': 'active',
                    'broadcastType': 'all',
-                   'part': 'id+snippet+contentDetails'
+                   'part': 'id,snippet,contentDetails'
                    }
+        headers = {"Authorization": "Bearer " + token_str}
         url = 'https://content.googleapis.com/youtube/v3/liveBroadcasts'
-        headers = {"Authorization": "Bearer %s" % token_str}
         r = requests.get(url, headers=headers, params=payload)
-
         if r.status_code == 200:
             resp = r.json()
             if len(resp["items"]) == 0:
@@ -103,7 +98,7 @@ class YTChat:
                 # Should only be 1 item unless YT adds multiple livestreams
                 # then we'll assume it's the first for now
                 print("Live events:", len(resp["items"]))
-                pprint(resp)
+                # pprint(resp)
                 print("*" * 50)
                 streamMeta = resp["items"][0]["snippet"]
                 liveChatID = streamMeta["liveChatId"]
